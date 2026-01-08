@@ -40,6 +40,7 @@ export class TranscriptionService {
       throw new Error("Linguistic Engine failure: API Key not initialized in environment.");
     }
 
+    // Creating instance inside the method to ensure we get the latest environment variables
     const ai = new GoogleGenAI({ apiKey });
     
     const prompt = `Please transcribe and analyze the attached audio file. 
@@ -50,7 +51,7 @@ export class TranscriptionService {
 
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-lite-latest', // Fallback to Lite for higher quota availability
+        model: 'gemini-3-flash-preview', // Most reliable model for multimodal tasks
         contents: {
           parts: [
             { inlineData: { data: audioBase64, mimeType } },
@@ -70,11 +71,19 @@ export class TranscriptionService {
       return response.text;
     } catch (error: any) {
       console.error("Gemini Service Error:", error);
-      // Re-throw with a cleaner message if it's a known quota issue
-      if (error.message?.includes('429')) {
+      
+      const errorMessage = error.message || '';
+      
+      // Handle known error patterns
+      if (errorMessage.includes('429')) {
         throw new Error("Analysis Rate Limit: The engine is currently saturated. Please wait 60 seconds and retry.");
+      } else if (errorMessage.includes('404')) {
+        throw new Error("Linguistic Terminal Error: The requested model version is currently unavailable in this sector. Try again in a moment.");
+      } else if (errorMessage.includes('Safety')) {
+        throw new Error("Linguistic Safety Protocol: The content of the audio triggered a safety filter. Analysis aborted.");
       }
-      throw error;
+      
+      throw new Error(`Engine Failure: ${errorMessage || "Unexpected synchronization error."}`);
     }
   }
 }
