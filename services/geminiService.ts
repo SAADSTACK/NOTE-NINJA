@@ -48,20 +48,33 @@ export class TranscriptionService {
     
     IMPORTANT TRANSLATION RULE: If any non-English speech is detected, provide the original transcription and the English translation on DIFFERENT lines. Do not combine them into one line.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
-      contents: {
-        parts: [
-          { inlineData: { data: audioBase64, mimeType } },
-          { text: prompt }
-        ]
-      },
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        temperature: 0.1,
-      }
-    });
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-lite-latest', // Fallback to Lite for higher quota availability
+        contents: {
+          parts: [
+            { inlineData: { data: audioBase64, mimeType } },
+            { text: prompt }
+          ]
+        },
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          temperature: 0.1,
+        }
+      });
 
-    return response.text;
+      if (!response || !response.text) {
+        throw new Error("Linguistic core returned an empty signal. Verify audio quality.");
+      }
+
+      return response.text;
+    } catch (error: any) {
+      console.error("Gemini Service Error:", error);
+      // Re-throw with a cleaner message if it's a known quota issue
+      if (error.message?.includes('429')) {
+        throw new Error("Analysis Rate Limit: The engine is currently saturated. Please wait 60 seconds and retry.");
+      }
+      throw error;
+    }
   }
 }
